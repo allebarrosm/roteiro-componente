@@ -1,0 +1,43 @@
+name: roteiro
+description: >-
+  Componente compartilhado de Roteiro (mapa, marcadores, títulos e rotas)
+  para EASYMART, Gestão e BackOffice. Android e Web.
+version: 0.2.0
+publish_to: none
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.29.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_mobx: ^2.3.0
+  mobx: ^2.6.0
+  google_maps_flutter: ^2.14.0
+  flutter_street_view:
+    git:
+      url: https://github.com/allebarrosm/FlutterStreetView
+      ref: 228c8902626dbfb148bc0d6d8a05d7d4a94c2e7b
+  google_maps_flutter_floating_marker_titles: ^1.2.0
+  flutter_floating_map_marker_titles_core: ^1.2.0
+  latlong2: ^0.9.0
+  http: ^1.2.0
+  web: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.11
+  mobx_codegen: ^2.6.0
+  flutter_lints: ^6.0.0
+
+flutter:
+  assets:
+    - assets/map_style.txt
+    - assets/images/monitoramento/
+    - assets/images/monitoramento/semanal/
+    - assets/images/monitoramento/quinzenal_1_3/
+    - assets/images/monitoramento/quinzenal_2_4/
+    - assets/images/monitoramento/mensal/
+    - assets/images/monitoramento/21dias/
