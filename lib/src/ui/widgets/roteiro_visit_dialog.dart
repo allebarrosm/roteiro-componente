@@ -90,7 +90,6 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
 
     setState(() {
       _dateBase = picked;
-      // Mesma regra do VisityDialog: a data base define o dia da visita.
       _day = VisityDay.fromWeekDay(picked.weekday);
     });
   }
@@ -253,21 +252,9 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
   }
 
   Widget _dayOption(VisityDay day) {
-    final color = Color(day.colorValue);
     return Row(
       children: [
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant,
-              width: 0.5,
-            ),
-          ),
-        ),
+        Image.asset(day.iconAsset, width: 12, height: 12),
         const SizedBox(width: 8),
         Text(day.title),
       ],

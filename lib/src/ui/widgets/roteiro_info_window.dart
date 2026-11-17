@@ -67,7 +67,7 @@ class RoteiroInfoWindow extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.titleSmall?.copyWith(
-                            color: scheme.onSurface,
+                            color: scheme.onSurfaceVariant,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -120,7 +120,7 @@ class RoteiroInfoWindow extends StatelessWidget {
                               child: Text(
                                 row.key,
                                 style: bodySmall.copyWith(
-                                  color: scheme.onSurfaceVariant,
+                                  color: scheme.onSurface,
                                 ),
                               ),
                             ),
