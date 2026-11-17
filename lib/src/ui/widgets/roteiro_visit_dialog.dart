@@ -99,12 +99,17 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final client = widget.client;
+    final textColor =
+        theme.brightness == Brightness.dark ? Colors.white : Colors.black;
 
     return AlertDialog(
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(widget.title),
+          Text(
+            widget.title,
+            style: theme.textTheme.titleLarge?.copyWith(color: textColor),
+          ),
           const SizedBox(height: 4),
           Text(
             '${client.personCode} - ${client.displayName}',
@@ -117,16 +122,12 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
               client.address,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: textColor),
             ),
           if ((client.representativeName ?? '').isNotEmpty)
             Text(
               'Representante: ${client.representativeName}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: textColor),
             ),
         ],
       ),
@@ -142,9 +143,10 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
                 hint: 'Selecione o dia',
                 items: [
                   for (final day in VisityDay.values)
-                    DropdownMenuItem(value: day, child: Text(day.title)),
+                    DropdownMenuItem(value: day, child: _dayOption(day)),
                 ],
                 onChanged: (value) => setState(() => _day = value),
+                accentColor: _day == null ? null : Color(_day!.colorValue),
               ),
               const SizedBox(height: 12),
               _dropdownField<PeriodicityFilter>(
@@ -158,8 +160,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
                       child: Text(periodicity.label),
                     ),
                 ],
-                onChanged: (value) =>
-                    setState(() => _periodicity = value),
+                onChanged: (value) => setState(() => _periodicity = value),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -181,7 +182,9 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
                     suffixIcon: Icon(Icons.calendar_today_outlined),
                   ),
                   child: Text(
-                    _dateBase == null ? 'Selecionar data' : _formatDate(_dateBase!),
+                    _dateBase == null
+                        ? 'Selecionar data'
+                        : _formatDate(_dateBase!),
                   ),
                 ),
               ),
@@ -218,11 +221,24 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     required String hint,
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?> onChanged,
+    Color? accentColor,
   }) {
+    final theme = Theme.of(context);
     return InputDecorator(
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+            color: accentColor ?? theme.colorScheme.outline,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+            color: accentColor ?? theme.colorScheme.primary,
+            width: 1.5,
+          ),
+        ),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<T>(
@@ -233,6 +249,28 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
           onChanged: onChanged,
         ),
       ),
+    );
+  }
+
+  Widget _dayOption(VisityDay day) {
+    final color = Color(day.colorValue);
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+              width: 0.5,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(day.title),
+      ],
     );
   }
 

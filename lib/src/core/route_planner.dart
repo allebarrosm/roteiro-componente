@@ -32,7 +32,7 @@ class RoutePlanner {
         .where((client) => client.coordinate != null)
         .toList(growable: false);
 
-    final routes = <RoteiroRoute>[];
+    final groups = <_RouteGroup>[];
 
     for (final day in VisityDay.values) {
       final dayClients = withCoordinate
@@ -54,19 +54,44 @@ class RoutePlanner {
           return a.personCode.compareTo(b.personCode);
         });
 
-        final waypoints = weekClients
-            .map((client) => client.coordinate!)
-            .toList(growable: false);
-
-        final points = await routeService.route(waypoints);
-        if (points.length < 2) continue;
-
-        routes.add(
-          RoteiroRoute(day: day, firstWeek: firstWeek, points: points),
+        groups.add(
+          _RouteGroup(
+            day: day,
+            firstWeek: firstWeek,
+            waypoints: weekClients
+                .map((client) => client.coordinate!)
+                .toList(growable: false),
+          ),
         );
       }
     }
 
-    return routes;
+    // Os grupos são independentes; dispara todos os OSRM em paralelo em vez
+    // de esperar dia/quinzena por dia/quinzena.
+    final routes = await Future.wait(
+      groups.map((group) async {
+        final points = await routeService.route(group.waypoints);
+        if (points.length < 2) return null;
+        return RoteiroRoute(
+          day: group.day,
+          firstWeek: group.firstWeek,
+          points: points,
+        );
+      }),
+    );
+
+    return routes.whereType<RoteiroRoute>().toList(growable: false);
   }
+}
+
+class _RouteGroup {
+  const _RouteGroup({
+    required this.day,
+    required this.firstWeek,
+    required this.waypoints,
+  });
+
+  final VisityDay day;
+  final bool firstWeek;
+  final List<GeoPoint> waypoints;
 }

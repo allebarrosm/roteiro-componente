@@ -54,6 +54,7 @@ class RoteiroDetailsCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: textTheme.titleMedium?.copyWith(
+                            color: scheme.onSurface,
                             fontWeight: FontWeight.w700,
                           ),
                         ),

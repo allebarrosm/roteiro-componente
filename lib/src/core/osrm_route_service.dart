@@ -12,7 +12,7 @@ import 'route_service.dart';
 class OsrmRouteService implements RouteService {
   OsrmRouteService({
     this.baseUrl = 'https://router.project-osrm.org',
-    this.timeout = const Duration(seconds: 12),
+    this.timeout = const Duration(seconds: 10),
     http.Client? client,
   }) : _client = client ?? http.Client();
 
@@ -31,7 +31,7 @@ class OsrmRouteService implements RouteService {
 
       final uri = Uri.parse(
         '$baseUrl/route/v1/driving/$coordinates'
-        '?overview=full&geometries=geojson',
+        '?overview=simplified&geometries=geojson&steps=false',
       );
 
       final response = await _client.get(uri).timeout(timeout);
