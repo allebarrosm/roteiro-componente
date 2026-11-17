@@ -373,6 +373,8 @@ class _RoteiroMapState extends State<RoteiroMap> {
             customItem: widget.customItem,
             onMapTap: widget.onMapTap,
             showFullScreenButton: false,
+            showStreetViewButton: widget.showStreetViewButton,
+            showMapTypeButton: widget.showMapTypeButton,
             fullscreen: true,
           ),
         );
