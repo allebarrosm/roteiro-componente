@@ -5,28 +5,34 @@ import '../../core/roteiro_client.dart';
 import '../../core/roteiro_visit_change.dart';
 import '../../core/visity_day.dart';
 
-/// Diálogo de edição de um ponto do roteiro (dia, frequência, ordem e data).
+/// Diálogo de edição de um ponto do roteiro.
 ///
 /// Retorna [RoteiroVisitChange] via `Navigator.pop`; quem chamou decide se
-/// persiste (`RoteiroStore.saveVisit`).
+/// persiste (`RoteiroStore.saveVisit`). A exclusão é delegada ao app via
+/// [onDelete] para que ele chame a API e atualize o roteiro.
 class RoteiroVisitDialog extends StatefulWidget {
   const RoteiroVisitDialog({
     super.key,
     required this.client,
-    this.title = 'Editar visita',
+    this.onDelete,
   });
 
   final RoteiroClient client;
-  final String title;
+
+  /// Quando informado, mostra o botão "Excluir Agenda".
+  final Future<bool> Function()? onDelete;
 
   static Future<RoteiroVisitChange?> show(
     BuildContext context,
     RoteiroClient client, {
-    String title = 'Editar visita',
+    Future<bool> Function()? onDelete,
   }) {
     return showDialog<RoteiroVisitChange>(
       context: context,
-      builder: (_) => RoteiroVisitDialog(client: client, title: title),
+      builder: (_) => RoteiroVisitDialog(
+        client: client,
+        onDelete: onDelete,
+      ),
     );
   }
 
@@ -37,9 +43,10 @@ class RoteiroVisitDialog extends StatefulWidget {
 class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
   late VisityDay? _day;
   late PeriodicityFilter? _periodicity;
-  late final TextEditingController _order;
+  late final int _initialOrder;
   DateTime? _dateBase;
   String? _error;
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -48,21 +55,13 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     _day = initial.day;
     _periodicity = initial.periodicity;
     _dateBase = initial.dateBase;
-    _order = TextEditingController(text: '${initial.visitOrder}');
-  }
-
-  @override
-  void dispose() {
-    _order.dispose();
-    super.dispose();
+    _initialOrder = initial.visitOrder;
   }
 
   void _save() {
-    final order = int.tryParse(_order.text.trim());
-
-    if (_day == null || _periodicity == null || order == null || order <= 0) {
+    if (_day == null || _periodicity == null) {
       setState(() {
-        _error = 'Informe dia, frequência e uma ordem maior que zero.';
+        _error = 'Selecione o dia e a frequência.';
       });
       return;
     }
@@ -72,7 +71,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
         client: widget.client,
         day: _day,
         periodicity: _periodicity,
-        visitOrder: order,
+        visitOrder: _initialOrder > 0 ? _initialOrder : 1,
         dateBase: _dateBase,
       ),
     );
@@ -94,170 +93,277 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     });
   }
 
+  Future<void> _pickDay() async {
+    final selected = await showModalBottomSheet<VisityDay>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final day in VisityDay.values)
+                ListTile(
+                  leading: Image.asset(day.iconAsset, width: 20, height: 20),
+                  title: Text(day.title),
+                  trailing: _day == day ? const Icon(Icons.check) : null,
+                  onTap: () => Navigator.of(context).pop(day),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected != null && mounted) {
+      setState(() => _day = selected);
+    }
+  }
+
+  Future<void> _pickPeriodicity() async {
+    final selected = await showModalBottomSheet<PeriodicityFilter>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              for (final periodicity in PeriodicityFilter.values)
+                ListTile(
+                  title: Text(periodicity.label),
+                  trailing: _periodicity == periodicity
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.of(context).pop(periodicity),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (selected != null && mounted) {
+      setState(() => _periodicity = selected);
+    }
+  }
+
+  Future<void> _delete() async {
+    final onDelete = widget.onDelete;
+    if (onDelete == null || _deleting) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir agenda?'),
+        content: const Text('A agenda deste cliente será removida.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Excluir'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    final deleted = await onDelete();
+    if (!mounted) return;
+
+    if (deleted) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() => _deleting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final client = widget.client;
-    final textColor =
-        theme.brightness == Brightness.dark ? Colors.white : Colors.black;
+    final scheme = theme.colorScheme;
 
     return AlertDialog(
-      title: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            widget.title,
-            style: theme.textTheme.titleLarge?.copyWith(color: textColor),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${client.personCode} - ${client.displayName}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          if (client.address.isNotEmpty)
-            Text(
-              client.address,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall?.copyWith(color: textColor),
-            ),
-          if ((client.representativeName ?? '').isNotEmpty)
-            Text(
-              'Representante: ${client.representativeName}',
-              style: theme.textTheme.bodySmall?.copyWith(color: textColor),
-            ),
-        ],
-      ),
+      backgroundColor: scheme.surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _dropdownField<VisityDay>(
-                label: 'Dia da visita',
-                value: _day,
-                hint: 'Selecione o dia',
-                items: [
-                  for (final day in VisityDay.values)
-                    DropdownMenuItem(value: day, child: _dayOption(day)),
-                ],
-                onChanged: (value) => setState(() => _day = value),
-                accentColor: _day == null ? null : Color(_day!.colorValue),
-              ),
-              const SizedBox(height: 12),
-              _dropdownField<PeriodicityFilter>(
-                label: 'Frequência',
-                value: _periodicity,
-                hint: 'Selecione a frequência',
-                items: [
-                  for (final periodicity in PeriodicityFilter.values)
-                    DropdownMenuItem(
-                      value: periodicity,
-                      child: Text(periodicity.label),
+              Row(
+                children: [
+                  Expanded(
+                    child: _summaryField(
+                      label: 'Data base',
+                      value: _dateBase == null
+                          ? 'Selecionar'
+                          : _formatDate(_dateBase!),
+                      onTap: _pickDate,
                     ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _summaryField(
+                      label: 'Frequência',
+                      value: _periodicity?.label ?? 'Selecionar',
+                      onTap: _pickPeriodicity,
+                    ),
+                  ),
                 ],
-                onChanged: (value) => setState(() => _periodicity = value),
+              ),
+              const SizedBox(height: 20),
+              _selectionRow(
+                label: 'Dias visita',
+                value: _day?.title,
+                onTap: _pickDay,
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: _order,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Ordem de visita',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              InkWell(
-                onTap: _pickDate,
-                borderRadius: BorderRadius.circular(4),
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Data base',
-                    border: OutlineInputBorder(),
-                    suffixIcon: Icon(Icons.calendar_today_outlined),
-                  ),
-                  child: Text(
-                    _dateBase == null
-                        ? 'Selecionar data'
-                        : _formatDate(_dateBase!),
-                  ),
-                ),
+              _selectionRow(
+                label: 'Frequência',
+                value: _periodicity?.label,
+                onTap: _pickPeriodicity,
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    _error!,
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
+                Text(
+                  _error!,
+                  style: TextStyle(color: scheme.error),
                 ),
               ],
+              if (_deleting) ...[
+                const SizedBox(height: 16),
+                const LinearProgressIndicator(),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  if (widget.onDelete != null) ...[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _deleting ? null : _delete,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: scheme.primary,
+                          side: BorderSide(color: scheme.primary),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text('Excluir Agenda'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: _deleting ? null : _save,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Salvar Alterações'),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          onPressed: _save,
-          child: const Text('Salvar alterações'),
-        ),
-      ],
     );
   }
 
-  Widget _dropdownField<T>({
+  Widget _summaryField({
     required String label,
-    required T? value,
-    required String hint,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-    Color? accentColor,
+    required String value,
+    required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
-    return InputDecorator(
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(
-            color: accentColor ?? theme.colorScheme.outline,
+    final scheme = theme.colorScheme;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: scheme.primary),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(color: scheme.primary),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: BorderSide(color: scheme.primary, width: 1.5),
           ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(
-            color: accentColor ?? theme.colorScheme.primary,
-            width: 1.5,
-          ),
-        ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          isExpanded: true,
-          value: value,
-          hint: Text(hint),
-          items: items,
-          onChanged: onChanged,
+        child: Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface),
         ),
       ),
     );
   }
 
-  Widget _dayOption(VisityDay day) {
-    return Row(
-      children: [
-        Image.asset(day.iconAsset, width: 12, height: 12),
-        const SizedBox(width: 8),
-        Text(day.title),
-      ],
+  Widget _selectionRow({
+    required String label,
+    String? value,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: scheme.onSurface,
+                  ),
+                ),
+              ),
+              if ((value ?? '').isNotEmpty) ...[
+                Flexible(
+                  child: Text(
+                    value!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Icon(Icons.chevron_right, color: scheme.onSurface),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

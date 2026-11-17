@@ -36,11 +36,10 @@ void main() {
     await tester.tap(find.text('abrir'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Editar visita'), findsOneWidget);
-    expect(find.text('Dia da visita'), findsOneWidget);
-    expect(find.text('Frequência'), findsOneWidget);
+    expect(find.text('Dias visita'), findsOneWidget);
+    expect(find.text('Frequência'), findsNWidgets(2));
 
-    await tester.tap(find.text('Salvar alterações'));
+    await tester.tap(find.text('Salvar Alterações'));
     await tester.pumpAndSettle();
 
     expect(result, isNotNull);
