@@ -2,7 +2,7 @@ name: roteiro
 description: >-
   Componente compartilhado de Roteiro (mapa, marcadores, títulos e rotas)
   para EASYMART, Gestão e BackOffice. Android e Web.
-version: 0.2.0
+version: 0.2.1
 publish_to: none
 
 environment:
