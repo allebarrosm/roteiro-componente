@@ -93,13 +93,9 @@ class _RoteiroMapState extends State<RoteiroMap> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      widget.controller.setMarkers(
-        widget.markers,
-        clustering: widget.clustering,
-      );
-    });
+    // Os marcadores já ficam disponíveis antes do mapa criar; assim o
+    // enquadramento inicial consegue usar os bounds corretos.
+    widget.controller.setMarkers(widget.markers, clustering: widget.clustering);
   }
 
   @override
@@ -123,14 +119,17 @@ class _RoteiroMapState extends State<RoteiroMap> {
     rootBundle
         .loadString('packages/roteiro/assets/map_style.txt')
         .then((style) {
-      if (!mounted) return;
-      widget.controller.setMapStyle(style);
-      // Mantido por compatibilidade com google_maps_flutter 2.14.
-      // ignore: deprecated_member_use
-      widget.controller.mapController?.setMapStyle(style).catchError((_) {});
-    }).catchError((Object error) {
-      debugPrint('[roteiro] map_style não carregado: $error');
-    });
+          if (!mounted) return;
+          widget.controller.setMapStyle(style);
+          // Mantido por compatibilidade com google_maps_flutter 2.14.
+          widget.controller.mapController
+              // ignore: deprecated_member_use
+              ?.setMapStyle(style)
+              .catchError((_) {});
+        })
+        .catchError((Object error) {
+          debugPrint('[roteiro] map_style não carregado: $error');
+        });
   }
 
   @override
@@ -181,6 +180,7 @@ class _RoteiroMapState extends State<RoteiroMap> {
 
   Future<void> _onMapCreated(GoogleMapController controller) async {
     widget.controller.attach(controller);
+    widget.controller.setMarkers(widget.markers, clustering: widget.clustering);
 
     final style = widget.controller.mapStyle;
     if (style != null && style.isNotEmpty) {
