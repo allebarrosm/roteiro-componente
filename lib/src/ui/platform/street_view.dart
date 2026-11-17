@@ -8,8 +8,8 @@ import 'street_view_stub.dart'
 /// Builder padrão do Street View.
 ///
 /// - Android: plugin nativo (`flutter_street_view`, fork do Gestão).
-/// - Web: fallback com link para abrir o ponto no Google Maps (os apps também
-///   não têm panorama nativo no Web).
+/// - Web: panorama via Google Maps JavaScript API, com fallback para abrir o
+///   ponto no Google Maps se a API não estiver disponível.
 /// - Demais plataformas: placeholder.
 Widget buildDefaultStreetView(
   BuildContext context,
