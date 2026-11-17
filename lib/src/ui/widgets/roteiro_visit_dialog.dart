@@ -43,7 +43,7 @@ class RoteiroVisitDialog extends StatefulWidget {
 class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
   late VisityDay? _day;
   late PeriodicityFilter? _periodicity;
-  late final int _initialOrder;
+  late int _visitOrder;
   DateTime? _dateBase;
   String? _error;
   bool _deleting = false;
@@ -55,13 +55,13 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     _day = initial.day;
     _periodicity = initial.periodicity;
     _dateBase = initial.dateBase;
-    _initialOrder = initial.visitOrder;
+    _visitOrder = initial.visitOrder > 0 ? initial.visitOrder : 1;
   }
 
   void _save() {
-    if (_day == null || _periodicity == null) {
+    if (_day == null || _periodicity == null || _visitOrder <= 0) {
       setState(() {
-        _error = 'Selecione o dia e a frequência.';
+        _error = 'Selecione o dia, a frequência e a sequência.';
       });
       return;
     }
@@ -71,7 +71,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
         client: widget.client,
         day: _day,
         periodicity: _periodicity,
-        visitOrder: _initialOrder > 0 ? _initialOrder : 1,
+        visitOrder: _visitOrder,
         dateBase: _dateBase,
       ),
     );
@@ -97,7 +97,9 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     final selected = await showModalBottomSheet<VisityDay>(
       context: context,
       showDragHandle: true,
+      backgroundColor: _sheetBackground(context),
       builder: (context) {
+        final textColor = _sheetTextColor(context);
         return SafeArea(
           child: ListView(
             shrinkWrap: true,
@@ -105,8 +107,14 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
               for (final day in VisityDay.values)
                 ListTile(
                   leading: Image.asset(day.iconAsset, width: 20, height: 20),
-                  title: Text(day.title),
-                  trailing: _day == day ? const Icon(Icons.check) : null,
+                  title: Text(
+                    day.title,
+                    style: TextStyle(color: textColor),
+                  ),
+                  iconColor: textColor,
+                  trailing: _day == day
+                      ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                      : null,
                   onTap: () => Navigator.of(context).pop(day),
                 ),
             ],
@@ -124,16 +132,21 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     final selected = await showModalBottomSheet<PeriodicityFilter>(
       context: context,
       showDragHandle: true,
+      backgroundColor: _sheetBackground(context),
       builder: (context) {
+        final textColor = _sheetTextColor(context);
         return SafeArea(
           child: ListView(
             shrinkWrap: true,
             children: [
               for (final periodicity in PeriodicityFilter.values)
                 ListTile(
-                  title: Text(periodicity.label),
+                  title: Text(
+                    periodicity.label,
+                    style: TextStyle(color: textColor),
+                  ),
                   trailing: _periodicity == periodicity
-                      ? const Icon(Icons.check)
+                      ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
                       : null,
                   onTap: () => Navigator.of(context).pop(periodicity),
                 ),
@@ -145,6 +158,40 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
 
     if (selected != null && mounted) {
       setState(() => _periodicity = selected);
+    }
+  }
+
+  Future<void> _pickSequence() async {
+    final count = _visitOrder + 10 < 50 ? 50 : _visitOrder + 10;
+    final selected = await showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: _sheetBackground(context),
+      builder: (context) {
+        final textColor = _sheetTextColor(context);
+        return SafeArea(
+          child: ListView.builder(
+            itemCount: count,
+            itemBuilder: (context, index) {
+              final value = index + 1;
+              return ListTile(
+                title: Text(
+                  '$value',
+                  style: TextStyle(color: textColor),
+                ),
+                trailing: _visitOrder == value
+                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                    : null,
+                onTap: () => Navigator.of(context).pop(value),
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (selected != null && mounted) {
+      setState(() => _visitOrder = selected);
     }
   }
 
@@ -187,6 +234,8 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final textColor =
+        theme.brightness == Brightness.dark ? Colors.white : Colors.black;
 
     return AlertDialog(
       backgroundColor: scheme.surface,
@@ -207,15 +256,17 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
                       value: _dateBase == null
                           ? 'Selecionar'
                           : _formatDate(_dateBase!),
+                      textColor: textColor,
                       onTap: _pickDate,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _summaryField(
-                      label: 'Frequência',
-                      value: _periodicity?.label ?? 'Selecionar',
-                      onTap: _pickPeriodicity,
+                      label: 'Sequência',
+                      value: '$_visitOrder',
+                      textColor: textColor,
+                      onTap: _pickSequence,
                     ),
                   ),
                 ],
@@ -224,12 +275,14 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
               _selectionRow(
                 label: 'Dias visita',
                 value: _day?.title,
+                textColor: textColor,
                 onTap: _pickDay,
               ),
               const SizedBox(height: 12),
               _selectionRow(
                 label: 'Frequência',
                 value: _periodicity?.label,
+                textColor: textColor,
                 onTap: _pickPeriodicity,
               ),
               if (_error != null) ...[
@@ -281,6 +334,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
   Widget _summaryField({
     required String label,
     required String value,
+    required Color textColor,
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
@@ -313,7 +367,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
           value,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onSurface),
+          style: theme.textTheme.bodyMedium?.copyWith(color: textColor),
         ),
       ),
     );
@@ -322,6 +376,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
   Widget _selectionRow({
     required String label,
     String? value,
+    required Color textColor,
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
@@ -341,7 +396,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
                 child: Text(
                   label,
                   style: theme.textTheme.titleSmall?.copyWith(
-                    color: scheme.onSurface,
+                    color: textColor,
                   ),
                 ),
               ),
@@ -353,18 +408,28 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.right,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurfaceVariant,
+                      color: textColor,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
               ],
-              Icon(Icons.chevron_right, color: scheme.onSurface),
+              Icon(Icons.chevron_right, color: textColor),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Color _sheetBackground(BuildContext context) {
+    return Theme.of(context).colorScheme.surface;
+  }
+
+  Color _sheetTextColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? Colors.white
+        : Colors.black;
   }
 
   static String _formatDate(DateTime value) {

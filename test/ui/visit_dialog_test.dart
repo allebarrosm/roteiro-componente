@@ -37,7 +37,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Dias visita'), findsOneWidget);
-    expect(find.text('Frequência'), findsNWidgets(2));
+    expect(find.text('Sequência'), findsOneWidget);
+    expect(find.text('Frequência'), findsOneWidget);
 
     await tester.tap(find.text('Salvar Alterações'));
     await tester.pumpAndSettle();
