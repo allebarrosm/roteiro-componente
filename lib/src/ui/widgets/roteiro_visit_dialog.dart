@@ -248,6 +248,18 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  tooltip: 'Fechar',
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(Icons.close, color: textColor),
+                ),
+              ),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   Expanded(
