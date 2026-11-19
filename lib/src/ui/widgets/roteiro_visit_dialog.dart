@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/periodicity.dart';
 import '../../core/roteiro_client.dart';
@@ -50,7 +51,7 @@ class RoteiroVisitDialog extends StatefulWidget {
 class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
   late VisityDay? _day;
   late PeriodicityFilter? _periodicity;
-  late int _visitOrder;
+  late final TextEditingController _sequence;
   DateTime? _dateBase;
   String? _error;
   bool _deleting = false;
@@ -62,13 +63,22 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     _day = initial.day;
     _periodicity = initial.periodicity;
     _dateBase = initial.dateBase;
-    _visitOrder = initial.visitOrder > 0 ? initial.visitOrder : 1;
+    _sequence = TextEditingController(
+      text: '${initial.visitOrder > 0 ? initial.visitOrder : 1}',
+    );
+  }
+
+  @override
+  void dispose() {
+    _sequence.dispose();
+    super.dispose();
   }
 
   void _save() {
-    if (_day == null || _periodicity == null || _visitOrder <= 0) {
+    final order = int.tryParse(_sequence.text.trim());
+    if (_day == null || _periodicity == null || order == null || order <= 0) {
       setState(() {
-        _error = 'Selecione o dia, a frequência e a sequência.';
+        _error = 'Selecione o dia, a frequência e informe a sequência.';
       });
       return;
     }
@@ -78,7 +88,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
         client: widget.client,
         day: _day,
         periodicity: _periodicity,
-        visitOrder: _visitOrder,
+        visitOrder: order,
         dateBase: _dateBase,
       ),
     );
@@ -90,7 +100,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     if (resolver == null || day == null) return;
 
     final value = resolver(day);
-    if (value > 0) _visitOrder = value;
+    if (value > 0) _sequence.text = '$value';
   }
 
   Future<void> _pickDate() async {
@@ -177,44 +187,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     );
 
     if (selected != null && mounted) {
-      setState(() {
-        _periodicity = selected;
-        _applyNextSequence();
-      });
-    }
-  }
-
-  Future<void> _pickSequence() async {
-    final count = _visitOrder + 10 < 50 ? 50 : _visitOrder + 10;
-    final selected = await showModalBottomSheet<int>(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: _sheetBackground(context),
-      builder: (context) {
-        final textColor = _sheetTextColor(context);
-        return SafeArea(
-          child: ListView.builder(
-            itemCount: count,
-            itemBuilder: (context, index) {
-              final value = index + 1;
-              return ListTile(
-                title: Text(
-                  '$value',
-                  style: TextStyle(color: textColor),
-                ),
-                trailing: _visitOrder == value
-                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
-                    : null,
-                onTap: () => Navigator.of(context).pop(value),
-              );
-            },
-          ),
-        );
-      },
-    );
-
-    if (selected != null && mounted) {
-      setState(() => _visitOrder = selected);
+      setState(() => _periodicity = selected);
     }
   }
 
@@ -297,11 +270,35 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _summaryField(
-                      label: 'Sequência',
-                      value: '$_visitOrder',
-                      textColor: textColor,
-                      onTap: _pickSequence,
+                    child: TextField(
+                      controller: _sequence,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                      ],
+                      style: TextStyle(color: textColor),
+                      decoration: InputDecoration(
+                        labelText: 'Sequência',
+                        labelStyle: TextStyle(color: scheme.primary),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: BorderSide(color: scheme.primary),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: BorderSide(
+                            color: scheme.primary,
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ],

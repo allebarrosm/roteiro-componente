@@ -40,6 +40,9 @@ void main() {
     expect(find.text('Sequência'), findsOneWidget);
     expect(find.text('Frequência'), findsOneWidget);
 
+    // A sequência é um campo digitável; o valor digitado deve prevalecer.
+    await tester.enterText(find.byType(TextField), '5');
+    await tester.pump();
     await tester.tap(find.text('Salvar Alterações'));
     await tester.pumpAndSettle();
 
@@ -47,6 +50,6 @@ void main() {
     expect(result!.client.personCode, '1001');
     expect(result!.day, VisityDay.monday);
     expect(result!.periodicity, PeriodicityFilter.weekly);
-    expect(result!.visitOrder, 1);
+    expect(result!.visitOrder, 5);
   });
 }
