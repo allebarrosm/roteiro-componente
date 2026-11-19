@@ -21,18 +21,33 @@ class RoteiroRoute {
 }
 
 /// Agrupa clientes por dia e por quinzena/semana, ordena por `visitOrder` e
-/// chama o [RouteService] apenas quando há pelo menos dois pontos.
+/// chama o [RouteService].
+///
+/// Regras (as mesmas do BackOffice):
+/// - quando as duas quinzenas do dia têm mais de um ponto, gera duas rotas;
+/// - quando uma delas tem só um ponto, junta os dois grupos em uma rota do dia;
+/// - se o OSRM falhar, devolve os próprios waypoints para o mapa desenhar uma
+///   linha sólida, nunca deixando o preview pontilhado como resultado final.
 class RoutePlanner {
   const RoutePlanner(this.routeService);
 
   final RouteService routeService;
 
-  Future<List<RoteiroRoute>> plan(Iterable<RoteiroClient> clients) async {
+  Future<List<RoteiroRoute>> plan(
+    Iterable<RoteiroClient> clients, {
+    void Function(List<RoteiroRoute> preview)? onPreview,
+  }) async {
     final withCoordinate = clients
         .where((client) => client.coordinate != null)
         .toList(growable: false);
 
     final groups = <_RouteGroup>[];
+
+    int compareClients(RoteiroClient a, RoteiroClient b) {
+      final byOrder = a.visitOrder.compareTo(b.visitOrder);
+      if (byOrder != 0) return byOrder;
+      return a.personCode.compareTo(b.personCode);
+    }
 
     for (final day in VisityDay.values) {
       final dayClients = withCoordinate
@@ -41,24 +56,43 @@ class RoutePlanner {
 
       if (dayClients.length < 2) continue;
 
-      for (final firstWeek in const [true, false]) {
-        final weekClients = dayClients
-            .where((client) => client.firstWeek == firstWeek)
-            .toList();
+      final firstWeek = dayClients
+          .where((client) => client.firstWeek)
+          .toList()
+        ..sort(compareClients);
+      final lastWeek = dayClients
+          .where((client) => !client.firstWeek)
+          .toList()
+        ..sort(compareClients);
 
-        if (weekClients.length < 2) continue;
-
-        weekClients.sort((a, b) {
-          final byOrder = a.visitOrder.compareTo(b.visitOrder);
-          if (byOrder != 0) return byOrder;
-          return a.personCode.compareTo(b.personCode);
-        });
+      if (firstWeek.length > 1 && lastWeek.length > 1) {
+        groups.add(
+          _RouteGroup(
+            day: day,
+            firstWeek: true,
+            waypoints: firstWeek
+                .map((client) => client.coordinate!)
+                .toList(growable: false),
+          ),
+        );
+        groups.add(
+          _RouteGroup(
+            day: day,
+            firstWeek: false,
+            waypoints: lastWeek
+                .map((client) => client.coordinate!)
+                .toList(growable: false),
+          ),
+        );
+      } else {
+        final all = [...firstWeek, ...lastWeek]..sort(compareClients);
+        if (all.length < 2) continue;
 
         groups.add(
           _RouteGroup(
             day: day,
-            firstWeek: firstWeek,
-            waypoints: weekClients
+            firstWeek: firstWeek.length >= lastWeek.length,
+            waypoints: all
                 .map((client) => client.coordinate!)
                 .toList(growable: false),
           ),
@@ -66,21 +100,38 @@ class RoutePlanner {
       }
     }
 
-    // Os grupos são independentes; dispara todos os OSRM em paralelo em vez
-    // de esperar dia/quinzena por dia/quinzena.
-    final routes = await Future.wait(
+    final preview = groups
+        .map(
+          (group) => RoteiroRoute(
+            day: group.day,
+            firstWeek: group.firstWeek,
+            points: group.waypoints,
+          ),
+        )
+        .toList(growable: false);
+
+    onPreview?.call(preview);
+
+    // Os grupos são independentes; dispara todos os OSRM em paralelo.
+    return Future.wait(
       groups.map((group) async {
-        final points = await routeService.route(group.waypoints);
-        if (points.length < 2) return null;
-        return RoteiroRoute(
-          day: group.day,
-          firstWeek: group.firstWeek,
-          points: points,
-        );
+        try {
+          final points = await routeService.route(group.waypoints);
+          return RoteiroRoute(
+            day: group.day,
+            firstWeek: group.firstWeek,
+            points: points.length >= 2 ? points : group.waypoints,
+          );
+        } catch (_) {
+          // Falha de rota não derruba a tela nem deixa o preview pontilhado.
+          return RoteiroRoute(
+            day: group.day,
+            firstWeek: group.firstWeek,
+            points: group.waypoints,
+          );
+        }
       }),
     );
-
-    return routes.whereType<RoteiroRoute>().toList(growable: false);
   }
 }
 

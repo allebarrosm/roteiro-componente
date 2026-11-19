@@ -20,9 +20,16 @@ class _CountingRouteService implements RouteService {
   }
 }
 
+class _EmptyRouteService implements RouteService {
+  const _EmptyRouteService();
+
+  @override
+  Future<List<GeoPoint>> route(List<GeoPoint> waypoints) async => const [];
+}
+
 void main() {
   group('RoutePlanner', () {
-    test('agrupa por dia/quinzena, ordena e ignora grupos pequenos', () async {
+    test('agrupa por dia/quinzena e junta quinzena isolada', () async {
       final planner = RoutePlanner(const _EchoRouteService());
 
       final routes = await planner.plan([
@@ -86,7 +93,7 @@ void main() {
       expect(routes[0].firstWeek, isTrue);
       expect(
         routes[0].points.map((point) => point.latitude),
-        [-8.01, -8.02],
+        [-8.01, -8.05, -8.02],
       );
 
       expect(routes[1].day, VisityDay.tuesday);
@@ -94,6 +101,37 @@ void main() {
       expect(
         routes[1].points.map((point) => point.latitude),
         [-8.04, -8.03],
+      );
+    });
+
+    test('usa os waypoints quando o OSRM não devolve rota', () async {
+      final planner = RoutePlanner(const _EmptyRouteService());
+      List<RoteiroRoute>? preview;
+
+      final routes = await planner.plan(
+        [
+          client(
+            code: '1',
+            day: VisityDay.monday,
+            visitOrder: 2,
+            lat: -8.02,
+          ),
+          client(
+            code: '2',
+            day: VisityDay.monday,
+            visitOrder: 1,
+            lat: -8.01,
+          ),
+        ],
+        onPreview: (value) => preview = value,
+      );
+
+      expect(preview, hasLength(1));
+      expect(preview!.single.points, hasLength(2));
+      expect(routes, hasLength(1));
+      expect(
+        routes.single.points.map((point) => point.latitude),
+        [-8.01, -8.02],
       );
     });
 

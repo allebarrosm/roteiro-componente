@@ -1,5 +1,6 @@
 export 'src/ui/map/roteiro_map.dart';
 export 'src/ui/map/roteiro_map_button.dart';
+export 'src/ui/map/roteiro_route_polyline_builder.dart';
 export 'src/ui/map/roteiro_map_controller.dart';
 export 'src/ui/map/roteiro_street_view_request.dart';
 export 'src/ui/map/roteiro_street_view_service.dart';

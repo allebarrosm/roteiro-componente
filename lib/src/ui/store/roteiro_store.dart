@@ -10,7 +10,7 @@ import '../../core/roteiro_visit_change.dart';
 import '../../core/route_planner.dart';
 import '../../core/route_service.dart';
 import '../../core/visity_day.dart';
-import '../theme/visity_day_ui.dart';
+import '../map/roteiro_route_polyline_builder.dart';
 import 'roteiro_marker_factory.dart';
 import 'roteiro_title_factory.dart';
 
@@ -142,23 +142,16 @@ abstract class RoteiroStoreBase with Store {
       return;
     }
 
-    final routes = await routePlanner.plan(visible);
+    const builder = RoteiroRoutePolylineBuilder();
 
-    polylines = {
-      for (final route in routes)
-        Polyline(
-          polylineId: PolylineId(
-            '${route.day.name}-${route.firstWeek ? 'first' : 'second'}',
-          ),
-          points: [
-            for (final point in route.points)
-              LatLng(point.latitude, point.longitude),
-          ],
-          color: (route.firstWeek ? route.day.color2 : route.day.color)
-              .withValues(alpha: 0.85),
-          width: 3,
-        ),
-    };
+    final routes = await routePlanner.plan(
+      visible,
+      onPreview: (preview) {
+        polylines = builder.build(preview, preview: true);
+      },
+    );
+
+    polylines = builder.build(routes);
   }
 
   void _refreshTitles() {
