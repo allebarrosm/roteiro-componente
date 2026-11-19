@@ -15,6 +15,7 @@ class RoteiroVisitDialog extends StatefulWidget {
     super.key,
     required this.client,
     this.onDelete,
+    this.nextSequence,
   });
 
   final RoteiroClient client;
@@ -22,16 +23,22 @@ class RoteiroVisitDialog extends StatefulWidget {
   /// Quando informado, mostra o botão "Excluir Agenda".
   final Future<bool> Function()? onDelete;
 
+  /// Recalcula a sequência ao escolher data/dia/frequência, como o
+  /// `getSeq` do BackOffice.
+  final int Function(VisityDay day)? nextSequence;
+
   static Future<RoteiroVisitChange?> show(
     BuildContext context,
     RoteiroClient client, {
     Future<bool> Function()? onDelete,
+    int Function(VisityDay day)? nextSequence,
   }) {
     return showDialog<RoteiroVisitChange>(
       context: context,
       builder: (_) => RoteiroVisitDialog(
         client: client,
         onDelete: onDelete,
+        nextSequence: nextSequence,
       ),
     );
   }
@@ -77,6 +84,15 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     );
   }
 
+  void _applyNextSequence() {
+    final resolver = widget.nextSequence;
+    final day = _day;
+    if (resolver == null || day == null) return;
+
+    final value = resolver(day);
+    if (value > 0) _visitOrder = value;
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -90,6 +106,7 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     setState(() {
       _dateBase = picked;
       _day = VisityDay.fromWeekDay(picked.weekday);
+      _applyNextSequence();
     });
   }
 
@@ -124,7 +141,10 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     );
 
     if (selected != null && mounted) {
-      setState(() => _day = selected);
+      setState(() {
+        _day = selected;
+        _applyNextSequence();
+      });
     }
   }
 
@@ -157,7 +177,10 @@ class _RoteiroVisitDialogState extends State<RoteiroVisitDialog> {
     );
 
     if (selected != null && mounted) {
-      setState(() => _periodicity = selected);
+      setState(() {
+        _periodicity = selected;
+        _applyNextSequence();
+      });
     }
   }
 
