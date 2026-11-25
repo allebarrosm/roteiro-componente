@@ -106,12 +106,16 @@ class _WebStreetViewState extends State<_WebStreetView> {
     options.setProperty('pov'.toJS, pov);
     options.setProperty('zoom'.toJS, 1.toJS);
     options.setProperty('visible'.toJS, true.toJS);
-    options.setProperty('disableDefaultUI'.toJS, false.toJS);
-    options.setProperty('fullscreenControl'.toJS, true.toJS);
-    options.setProperty('addressControl'.toJS, true.toJS);
-    options.setProperty('linksControl'.toJS, true.toJS);
-    options.setProperty('panControl'.toJS, true.toJS);
-    options.setProperty('zoomControl'.toJS, true.toJS);
+
+    // Na miniatura do card (150x100) os controles do Google cobrem a foto e
+    // ficam cortados; sem eles o panorama aparece limpo.
+    final controls = request.showControls;
+    options.setProperty('disableDefaultUI'.toJS, (!controls).toJS);
+    options.setProperty('fullscreenControl'.toJS, controls.toJS);
+    options.setProperty('addressControl'.toJS, controls.toJS);
+    options.setProperty('linksControl'.toJS, controls.toJS);
+    options.setProperty('panControl'.toJS, controls.toJS);
+    options.setProperty('zoomControl'.toJS, controls.toJS);
     options.setProperty('motionTracking'.toJS, false.toJS);
     return options;
   }
