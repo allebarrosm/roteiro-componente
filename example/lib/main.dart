@@ -1,12 +1,13 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:roteiro/roteiro.dart';
 
-const String _googleMapsApiKey =
-    String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+const String _googleMapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+const int _stressCount = int.fromEnvironment('ROTEIRO_STRESS');
 
 void main() {
   runApp(const RoteiroExampleApp());
@@ -65,7 +66,12 @@ class _RoteiroDemoPageState extends State<RoteiroDemoPage> {
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_store.setClients(_mockClients()));
+      if (_stressCount > 0) _store.showRoute = false;
+      unawaited(
+        _store.setClients(
+          _stressCount > 0 ? _stressClients(_stressCount) : _mockClients(),
+        ),
+      );
     });
   }
 
@@ -86,9 +92,7 @@ class _RoteiroDemoPageState extends State<RoteiroDemoPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          saved
-              ? 'Visita atualizada.'
-              : 'Não foi possível atualizar a visita.',
+          saved ? 'Visita atualizada.' : 'Não foi possível atualizar a visita.',
         ),
       ),
     );
@@ -263,6 +267,37 @@ RoteiroClient _client({
     dateBase: dateBase ?? DateTime(2026, 11, 10),
     lastPurchase: DateTime(2026, 10, 28),
   );
+}
+
+List<RoteiroClient> _stressClients(int count) {
+  final random = math.Random(42);
+  const days = [
+    VisityDay.monday,
+    VisityDay.tuesday,
+    VisityDay.wednesday,
+    VisityDay.thursday,
+    VisityDay.friday,
+  ];
+  return List.generate(count, (i) {
+    final dense = i.isEven;
+    final lat = dense
+        ? -8.05 + (random.nextDouble() - 0.5) * 0.4
+        : -3.0 - random.nextDouble() * 10;
+    final lon = dense
+        ? -34.90 + (random.nextDouble() - 0.5) * 0.4
+        : -35.0 - random.nextDouble() * 10;
+    return _client(
+      code: '${10000 + i}',
+      name: 'Cliente ${i + 1}',
+      address: 'Rua Teste, ${i + 1}',
+      day: days[i % days.length],
+      periodicity: Periodicity.weekly,
+      firstWeek: true,
+      visitOrder: i + 1,
+      lat: lat,
+      lon: lon,
+    );
+  });
 }
 
 List<RoteiroClient> _mockClients() {

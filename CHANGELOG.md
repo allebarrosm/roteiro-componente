@@ -1,5 +1,16 @@
 # Changelog
 
+## Não lançado
+
+- Carga do mapa por área visível + agrupamento por zoom
+  (`RoteiroMarkerClusterer`): ao parar a câmera (`onCameraIdle`) só os pontos
+  da tela (+25% de margem) vão para o mapa; abaixo do zoom 15, pontos próximos
+  com o mesmo ícone (dia/periodicidade) aparecem uma vez só, com o próprio
+  ícone e sem contador; o toque aproxima até abrir o grupo.
+  Títulos flutuantes só para pontos abertos. Substitui o antigo "skip" por
+  índice, que escondia pontos sem olhar a posição.
+- `RoteiroMapController` aceita `clusterer` e `viewportMargin`; `updatedMarkers()` agora retorna `Future<void>`.
+
 ## 0.2.0
 
 - Edição opcional de pontos do roteiro: `editableVisits` + `onSaveVisit`,

@@ -90,6 +90,36 @@ class RoteiroMap extends StatefulWidget {
 class _RoteiroMapState extends State<RoteiroMap> {
   bool _styleRequested = false;
 
+  List<FloatingMarkerTitleInfo>? _titlesSource;
+  Set<Marker>? _titlesMarkers;
+  List<FloatingMarkerTitleInfo> _titlesCache = const [];
+
+  /// Com agrupamento ligado, só os pontos abertos (não agrupados e dentro da
+  /// área carregada) ganham título flutuante. Memoizado para não entregar uma
+  /// lista nova ao mapa a cada rebuild.
+  List<FloatingMarkerTitleInfo> _visibleTitles() {
+    final controller = widget.controller;
+    final visible = controller.visibleMarkers;
+    if (!controller.clustering) return widget.titles;
+
+    if (identical(_titlesSource, widget.titles) &&
+        identical(_titlesMarkers, visible)) {
+      return _titlesCache;
+    }
+
+    _titlesSource = widget.titles;
+    _titlesMarkers = visible;
+    _titlesCache = widget.titles
+        .where(
+          (title) => controller.isIndividualAt(
+            title.latLng.latitude,
+            title.latLng.longitude,
+          ),
+        )
+        .toList(growable: false);
+    return _titlesCache;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -163,10 +193,11 @@ class _RoteiroMapState extends State<RoteiroMap> {
       mapType: controller.isNormalType ? MapType.normal : MapType.satellite,
       markers: controller.visibleMarkers,
       polylines: widget.polylines,
-      floatingTitles: widget.titles,
+      floatingTitles: _visibleTitles(),
       fmtoOptions: const FMTOOptions(textSize: 10),
       onMapCreated: _onMapCreated,
       onCameraMove: controller.onCameraMove,
+      onCameraIdle: controller.onCameraIdle,
       onTap: widget.onMapTap,
       zoomControlsEnabled: false,
       compassEnabled: false,

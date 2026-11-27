@@ -4,11 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:mobx/mobx.dart';
 
+import 'roteiro_marker_clusterer.dart';
 import 'roteiro_street_view_service.dart';
 
 part 'roteiro_map_controller.g.dart';
 
-/// Estado do mapa: câmera, marcadores visíveis (clustering), tipo de mapa e
+/// Estado do mapa: câmera, marcadores visíveis (recorte por área + grupos), tipo de mapa e
 /// Street View.
 ///
 /// É separado do store de dados: o mapa não sabe de onde os clientes vieram.
@@ -20,6 +21,8 @@ abstract class RoteiroMapControllerBase with Store {
     RoteiroStreetViewService? streetViewService,
     void Function(String message)? onError,
     double initialZoom = 5,
+    this.clusterer = const RoteiroMarkerClusterer(),
+    this.viewportMargin = 0.25,
   })  : streetViewService =
             streetViewService ?? const AlwaysAvailableStreetViewService(),
         onError = onError ?? ((message) => debugPrint('[roteiro] $message')),
@@ -27,6 +30,16 @@ abstract class RoteiroMapControllerBase with Store {
 
   final RoteiroStreetViewService streetViewService;
   final void Function(String message) onError;
+
+  /// Regras de agrupamento (tamanho da célula, zoom em que tudo abre).
+  final RoteiroMarkerClusterer clusterer;
+
+  /// Fração da tela somada em cada lado da área visível ao recortar pontos.
+  final double viewportMargin;
+
+  LatLngBounds? _visibleBounds;
+  Set<String> _individualKeys = <String>{};
+  int _updateRequest = 0;
 
   @observable
   String? mapStyle;
@@ -99,6 +112,7 @@ abstract class RoteiroMapControllerBase with Store {
     if (value) {
       updatedMarkers();
     } else {
+      _updateRequest++;
       visibleMarkers = Set<Marker>.of(markers);
     }
   }
@@ -109,63 +123,101 @@ abstract class RoteiroMapControllerBase with Store {
     if (this.clustering) {
       updatedMarkers();
     } else {
+      _updateRequest++;
       visibleMarkers = Set<Marker>.of(markers);
     }
   }
 
-  /// Cluster simples por zoom (o mesmo "skip" usado hoje no EASYMART).
+  /// Recalcula o que vai para o mapa: só os pontos da área visível (mais
+  /// [viewportMargin]) e, abaixo de [RoteiroMarkerClusterer.maxClusterZoom],
+  /// pontos próximos agrupados num marcador com contador.
   ///
-  /// Mantido no pacote para paridade Android/Web; um cluster nativo pode
-  /// substituir isso no futuro sem mudar a API do widget.
-  void updatedMarkers() {
+  /// Roda quando a câmera para (`onCameraIdle`) e quando os marcadores mudam,
+  /// nunca a cada quadro do gesto.
+  Future<void> updatedMarkers() async {
+    final request = ++_updateRequest;
+
     if (markers.isEmpty) {
+      _individualKeys = <String>{};
       visibleMarkers = <Marker>{};
       return;
     }
 
-    final skip = _markersToSkip(lastZoom ?? 17, markers.length);
-    if (skip <= 0) {
-      visibleMarkers = Set<Marker>.of(markers);
-      return;
-    }
+    final result = clusterer.cluster(
+      markers,
+      zoom: lastZoom ?? zoomMap,
+      bounds: _visibleBounds,
+    );
 
-    final list = markers.toList(growable: false);
-    final visible = <Marker>{};
-    for (var index = 0; index < list.length; index += skip) {
-      visible.add(list[index]);
-    }
-    visible.add(list.last);
-    visibleMarkers = visible;
+    // O grupo usa um cliente real como marcador (mesmo ícone, sem contador);
+    // o toque aproxima o mapa até abrir o grupo.
+    final clusterMarkers = result.clusters.map(
+      (cluster) => cluster.representative.copyWith(
+        consumeTapEventsParam: true,
+        onTapParam: () => zoomToCluster(cluster),
+      ),
+    );
+
+    if (request != _updateRequest || _disposed || !clustering) return;
+
+    _individualKeys = {
+      for (final marker in result.singles) _keyOf(marker.position),
+    };
+    visibleMarkers = <Marker>{...result.singles, ...clusterMarkers};
   }
 
-  int _markersToSkip(double zoom, int total) {
-    final double ratio;
-    if (zoom >= 16) {
-      return 0;
-    } else if (zoom >= 14) {
-      ratio = 0.005;
-    } else if (zoom >= 12) {
-      ratio = 0.007;
-    } else if (zoom >= 10) {
-      ratio = 0.02;
-    } else if (zoom >= 8) {
-      ratio = 0.08;
-    } else if (zoom >= 6) {
-      ratio = 0.09;
-    } else if (zoom >= 5) {
-      ratio = 0.1;
-    } else {
-      ratio = 0.2;
-    }
-    return (total * ratio).toInt();
-  }
+  /// `true` quando há um marcador individual (não agrupado) nesse ponto.
+  /// Usado para mostrar títulos flutuantes só dos pontos abertos.
+  bool isIndividualAt(double latitude, double longitude) =>
+      _individualKeys.contains(_keyOfRaw(latitude, longitude));
+
+  static String _keyOf(LatLng p) => _keyOfRaw(p.latitude, p.longitude);
+
+  static String _keyOfRaw(double lat, double lng) =>
+      '${lat.toStringAsFixed(6)},${lng.toStringAsFixed(6)}';
 
   void onCameraMove(CameraPosition position) {
-    final zoomChanged =
-        lastZoom == null || (lastZoom! - position.zoom).abs() > 0.01;
     lastZoom = position.zoom;
-    if (clustering && zoomChanged) {
-      updatedMarkers();
+  }
+
+  /// A câmera parou: lê a área visível e recarrega os pontos dela.
+  Future<void> onCameraIdle() async {
+    if (!clustering || _disposed) return;
+    final controller = _mapController;
+    if (controller != null) {
+      try {
+        final region = await controller.getVisibleRegion();
+        final degenerate =
+            region.southwest.latitude == region.northeast.latitude &&
+                region.southwest.longitude == region.northeast.longitude;
+        _visibleBounds = degenerate
+            ? null
+            : RoteiroMarkerClusterer.expand(region, viewportMargin);
+      } catch (_) {
+        _visibleBounds = null;
+      }
+    }
+    if (_disposed) return;
+    await updatedMarkers();
+  }
+
+  /// Aproxima o mapa até "abrir" o grupo tocado.
+  Future<void> zoomToCluster(RoteiroCluster cluster) async {
+    final controller = _mapController;
+    if (controller == null || _disposed) return;
+    final bounds = cluster.bounds;
+    final samePoint = bounds.southwest == bounds.northeast;
+    try {
+      await controller.animateCamera(
+        samePoint
+            ? CameraUpdate.newLatLngZoom(
+                cluster.position,
+                clusterer.maxClusterZoom,
+              )
+            : CameraUpdate.newLatLngBounds(bounds, 60),
+      );
+    } catch (error) {
+      onError('Não foi possível abrir o grupo: $error');
     }
   }
 
